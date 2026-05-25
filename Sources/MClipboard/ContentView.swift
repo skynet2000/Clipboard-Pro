@@ -121,7 +121,6 @@ struct ContentView: View {
                             onSelect: {
                                 selectedIndex = index
                                 clipboardManager.copyItem(item)
-                                closeWindow()
                             },
                             onPin: { clipboardManager.togglePin(item) },
                             onDelete: {
@@ -201,7 +200,6 @@ struct ContentView: View {
         let filtered = clipboardManager.filteredItems
         guard selectedIndex >= 0, selectedIndex < filtered.count else { return }
         clipboardManager.copyItem(filtered[selectedIndex])
-        closeWindow()
     }
 
     private func handleDownArrow() {

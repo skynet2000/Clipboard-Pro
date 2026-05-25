@@ -148,9 +148,15 @@ final class ClipboardManager: ObservableObject {
         pasteboard.clearContents()
         if item.type == "image", let data = item.imageData {
             pasteboard.setData(data, forType: .png)
+            lastImageData = data
+            lastTextContent = nil
         } else if let text = item.textContent {
             pasteboard.setString(text, forType: .string)
+            lastTextContent = text
+            lastImageData = nil
         }
+        // Suppress monitor from re-adding the item we just copied
+        lastChangeCount = pasteboard.changeCount
     }
 
     // MARK: - Queries

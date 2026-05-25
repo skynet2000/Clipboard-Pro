@@ -37,7 +37,7 @@ struct HistoryRowView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 12).padding(.vertical, 6)
+        .padding(.horizontal, 14).padding(.vertical, 8)
         .contentShape(Rectangle())
         .onTapGesture { onSelect() }
         .contextMenu {
@@ -69,19 +69,19 @@ struct HistoryRowView: View {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.blue.opacity(0.2), lineWidth: 1)
                     )
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 4)
+                    RoundedRectangle(cornerRadius: 8)
                         .fill(Color.blue.opacity(0.08))
-                        .frame(width: 32, height: 32)
+                        .frame(width: 72, height: 72)
                     Image(systemName: "doc.text")
-                        .font(.system(size: 12))
+                        .font(.system(size: 28))
                         .foregroundColor(Color(red: 0.4, green: 0.65, blue: 0.9))
                 }
             }
