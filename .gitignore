@@ -1,0 +1,8 @@
+.build/
+MClipboard.app/
+MClipboard-*.dmg
+.DS_Store
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+.swiftpm/
