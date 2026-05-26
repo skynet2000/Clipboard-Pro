@@ -6,6 +6,10 @@
 </p>
 
 <p align="center">
+  <a href="README_EN.md">English</a> | <strong>中文</strong>
+</p>
+
+<p align="center">
   <a href="https://github.com/skynet2000/Clipboard-Pro/actions"><img src="https://github.com/skynet2000/Clipboard-Pro/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <a href="https://www.apple.com/macos/"><img src="https://img.shields.io/badge/macOS-14.0%2B-blue" alt="macOS"></a>
   <a href="https://swift.org"><img src="https://img.shields.io/badge/Swift-6.2-orange" alt="Swift"></a>
