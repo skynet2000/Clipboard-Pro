@@ -29,9 +29,11 @@ struct HistoryRowView: View {
                             .font(.system(size: 8))
                             .foregroundColor(.orange)
                     }
-                    Text(formatTimestamp(item.timestamp))
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                    if let ts = safeTimestamp {
+                        Text(formatTimestamp(ts))
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
 
@@ -89,6 +91,12 @@ struct HistoryRowView: View {
     }
 
     // MARK: - Helpers
+
+    // Guard against stale managed objects (deleted but still referenced during view teardown)
+    private var safeTimestamp: Date? {
+        guard !item.isDeleted, item.managedObjectContext != nil else { return nil }
+        return item.timestamp
+    }
 
     private var previewText: String {
         let text = item.textContent ?? ""

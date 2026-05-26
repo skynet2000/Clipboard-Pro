@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Carbon
 
 // MARK: - AppDelegate
 
@@ -8,17 +9,181 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static var shared: AppDelegate?
     private var overlayWindow: OverlayWindow?
     private var bubbleWindow: BubbleWindow?
+    private var hotKeyRef: EventHotKeyRef?
+    private var isOverlayShowing = false
+    private var isHotKeyRegistered = false
+    private var shortcutCount: Int = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
-        // Activate first so windows can display in accessory mode
         NSApp.activate(ignoringOtherApps: true)
-        // Brief delay to let activation settle, then show bubble
+        setupMainMenu()
+        registerGlobalShortcut()
+        registerLocalKeyMonitor()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.showBubble()
         }
-        registerGlobalShortcut()
         showFirstLaunchAlertIfNeeded()
+    }
+
+    // MARK: - Main Menu
+
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+        let appMenuItem = NSMenuItem()
+        appMenuItem.submenu = NSMenu()
+        appMenuItem.submenu?.addItem(
+            NSMenuItem(title: "About MClipboard", action: nil, keyEquivalent: "")
+        )
+        appMenuItem.submenu?.addItem(.separator())
+        appMenuItem.submenu?.addItem(
+            NSMenuItem(title: "Quit MClipboard",
+                       action: #selector(NSApplication.terminate(_:)),
+                       keyEquivalent: "q")
+        )
+        mainMenu.addItem(appMenuItem)
+
+        let windowMenuItem = NSMenuItem()
+        windowMenuItem.submenu = NSMenu(title: "Window")
+        let toggleItem = NSMenuItem(
+            title: "Toggle MClipboard",
+            action: #selector(handleMenuShortcut),
+            keyEquivalent: "V"
+        )
+        toggleItem.keyEquivalentModifierMask = [.command, .shift]
+        windowMenuItem.submenu?.addItem(toggleItem)
+        mainMenu.addItem(windowMenuItem)
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func handleMenuShortcut() {
+        handleShortcut()
+    }
+
+    // MARK: - Local Key Monitor (backup)
+
+    private func registerLocalKeyMonitor() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.modifierFlags.intersection([.command, .shift]) == [.command, .shift],
+                  event.keyCode == 9
+            else { return event }
+            self?.handleShortcut()
+            return nil
+        }
+    }
+
+    // MARK: - Global Shortcut (⌘⇧V) — Carbon RegisterEventHotKey
+
+    private static let hotKeyID = EventHotKeyID(signature: 0x4D434C50, id: 1)
+
+    private func registerGlobalShortcut() {
+        let status = RegisterEventHotKey(
+            UInt32(kVK_ANSI_V),
+            UInt32(cmdKey | shiftKey),
+            Self.hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &hotKeyRef
+        )
+        if status == noErr {
+            isHotKeyRegistered = true
+            fputs("[MClipboard] Carbon hotkey ⌘⇧V registered\n", stderr)
+            fflush(stderr)
+
+            var eventType = EventTypeSpec(
+                eventClass: OSType(kEventClassKeyboard),
+                eventKind: UInt32(kEventHotKeyPressed)
+            )
+
+            // Use a static trampoline since Carbon callbacks are C function pointers
+            // and inline closures can be fragile with capture semantics
+            InstallEventHandler(
+                GetApplicationEventTarget(),
+                MClipboardHotKeyHandler,
+                1,
+                &eventType,
+                Unmanaged.passRetained(self as AnyObject).toOpaque(),
+                nil
+            )
+        } else {
+            fputs("[MClipboard] Carbon hotkey FAILED (status=\(status)), falling back to NSEvent\n", stderr)
+            fflush(stderr)
+            registerNSEventGlobalMonitor()
+        }
+    }
+
+    private func registerNSEventGlobalMonitor() {
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.modifierFlags.intersection([.command, .shift]) == [.command, .shift],
+                  event.keyCode == 9
+            else { return }
+            self?.handleShortcut()
+        }
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.modifierFlags.intersection([.command, .shift]) == [.command, .shift],
+                  event.keyCode == 9
+            else { return event }
+            self?.handleShortcut()
+            return nil
+        }
+    }
+
+    // MARK: - Shortcut Handling (Three-State Toggle)
+
+    func handleShortcut() {
+        shortcutCount += 1
+        fputs("[MClipboard] shortcut #\(shortcutCount) isShowing=\(isOverlayShowing) isKey=\(overlayWindow?.isKeyWindow ?? false)\n", stderr)
+        fflush(stderr)
+
+        if !isOverlayShowing {
+            // State 1: Window is hidden → show it
+            fputs("[MClipboard] → showOverlay\n", stderr)
+            fflush(stderr)
+            showOverlay()
+        } else if overlayWindow?.isKeyWindow != true {
+            // State 2: Window is open but behind other windows → bring to front
+            fputs("[MClipboard] → bringToFront\n", stderr)
+            fflush(stderr)
+            bringOverlayToFront()
+        } else {
+            // State 3: Window is frontmost → hide it
+            fputs("[MClipboard] → hideOverlay\n", stderr)
+            fflush(stderr)
+            hideOverlay()
+        }
+    }
+
+    func showOverlay() {
+        if overlayWindow == nil {
+            overlayWindow = OverlayWindow()
+        }
+        // Temporarily raise level to guarantee frontmost in accessory mode,
+        // then reset to normal after the window settles.
+        overlayWindow?.level = .floating
+        overlayWindow?.orderFrontRegardless()
+        overlayWindow?.makeKey()
+        NSApp.activate(ignoringOtherApps: true)
+        isOverlayShowing = true
+        DispatchQueue.main.async {
+            self.overlayWindow?.level = .normal
+        }
+    }
+
+    func bringOverlayToFront() {
+        guard let window = overlayWindow else { return }
+        window.level = .floating
+        window.orderFrontRegardless()
+        window.makeKey()
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            window.level = .normal
+        }
+    }
+
+    func hideOverlay() {
+        overlayWindow?.orderOut(nil)
+        isOverlayShowing = false
     }
 
     // MARK: - Floating Bubble
@@ -26,16 +191,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showBubble() {
         guard bubbleWindow == nil else { return }
         bubbleWindow = BubbleWindow { [weak self] in
-            self?.toggleOverlay()
+            guard let self else { return }
+            if self.isOverlayShowing {
+                self.hideOverlay()
+            } else {
+                self.showOverlay()
+            }
         }
 
-        // On first run, briefly flash the main window to confirm app is alive
         let key = "MClipboard_firstWindowShown"
         if !UserDefaults.standard.bool(forKey: key) {
             UserDefaults.standard.set(true, forKey: key)
             showOverlay()
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-                self?.overlayWindow?.orderOut(nil)
+                self?.hideOverlay()
             }
         }
     }
@@ -52,72 +221,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.informativeText = """
         MClipboard monitors your clipboard and lets you recall history.
 
-        🔑 To use the global shortcut (⌘⇧V), grant Accessibility permission:
-        System Settings → Privacy & Security → Accessibility → add MClipboard
+        ⌘⇧V — Toggle clipboard panel from anywhere
+        🫧 — Click the floating bubble to show the panel
 
-        Click the floating blue bubble to open the clipboard panel.
+        No permissions needed. Just copy and paste.
         """
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Open Accessibility Settings")
-        alert.addButton(withTitle: "Later")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(
-                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-            )
-        }
+        alert.addButton(withTitle: "Got it")
+        alert.runModal()
     }
+}
 
-    // MARK: - Global Shortcut (⌘⇧V)
+// MARK: - Carbon HotKey Callback (C function pointer)
 
-    private func registerGlobalShortcut() {
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .shift]),
-               event.keyCode == 9
-            {
-                Task { @MainActor [weak self] in self?.toggleOverlay() }
+private func MClipboardHotKeyHandler(
+    _: OpaquePointer?,
+    _: EventRef?,
+    _ userData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    let delegate = Unmanaged<AppDelegate>.fromOpaque(userData!).takeUnretainedValue()
+    // Carbon handlers may run on main or a Carbon event thread depending on
+    // macOS version. dispatch_sync from main would deadlock, so check first.
+    if Thread.isMainThread {
+        MainActor.assumeIsolated {
+            delegate.handleShortcut()
+        }
+    } else {
+        DispatchQueue.main.sync {
+            MainActor.assumeIsolated {
+                delegate.handleShortcut()
             }
         }
-
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.modifierFlags.contains([.command, .shift]),
-               event.keyCode == 9
-            {
-                Task { @MainActor [weak self] in self?.toggleOverlay() }
-                return nil
-            }
-            return event
-        }
     }
-
-    // MARK: - Window Toggle
-
-    func toggleOverlay() {
-        if overlayWindow?.isVisible == true {
-            overlayWindow?.orderOut(nil)
-        } else {
-            showOverlay()
-        }
-    }
-
-    func showOverlay() {
-        if let win = overlayWindow {
-            win.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-        } else {
-            let window = OverlayWindow()
-            overlayWindow = window
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-        }
-    }
+    return noErr
 }
 
 // MARK: - Floating Bubble Window
 
 final class BubbleWindow: NSWindow {
-    private var initialLocation: NSPoint = .zero
-
     init(onTap: @escaping () -> Void) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 46, height: 46),
@@ -147,7 +288,6 @@ final class BubbleWindow: NSWindow {
             ))
         }
 
-        // Force visible regardless of activation state
         orderFrontRegardless()
     }
 }
@@ -156,12 +296,10 @@ final class BubbleWindow: NSWindow {
 
 struct BubbleView: View {
     let onTap: () -> Void
-
     @State private var isHovered = false
 
     var body: some View {
         ZStack {
-            // Frosted glass pill — macOS-native look
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
                 .frame(width: 46, height: 46)
@@ -185,9 +323,7 @@ struct BubbleView: View {
         .scaleEffect(isHovered ? 1.06 : 1.0)
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .onTapGesture { onTap() }
-        .onHover { hovering in
-            isHovered = hovering
-        }
+        .onHover { hovering in isHovered = hovering }
         .contextMenu {
             Button("Show Clipboard") { onTap() }
             Divider()
@@ -212,8 +348,6 @@ final class OverlayWindow: NSWindow {
         title = "MClipboard"
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = true
-        level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isReleasedWhenClosed = false
         minSize = NSSize(width: 320, height: 320)
 
@@ -234,6 +368,6 @@ final class OverlayWindow: NSWindow {
     }
 
     override func close() {
-        orderOut(nil)
+        AppDelegate.shared?.hideOverlay()
     }
 }

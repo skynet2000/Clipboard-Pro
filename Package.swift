@@ -9,7 +9,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "MClipboard",
-            path: "Sources/MClipboard"
+            path: "Sources/MClipboard",
+            linkerSettings: [
+                .linkedFramework("Carbon")
+            ]
         )
     ]
 )

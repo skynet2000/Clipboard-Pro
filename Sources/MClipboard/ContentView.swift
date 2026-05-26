@@ -53,7 +53,7 @@ struct ContentView: View {
 
             Button {
                 clipboardManager.clearUnpinned()
-                selectedIndex = 0
+                selectedIndex = -1
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 12))

@@ -1,8 +1,9 @@
 .build/
 MClipboard.app/
 MClipboard-*.dmg
-.DS_Store
+**.DS_Store
 *.xcodeproj/
 xcuserdata/
 DerivedData/
 .swiftpm/
+MClipboard-promo.pptx

@@ -137,7 +137,14 @@ final class ClipboardManager: ObservableObject {
     }
 
     func clearUnpinned() {
-        for item in items where !item.isPinned {
+        // Keep only pinned items in the array FIRST.
+        // This guarantees SwiftUI renders empty/pinned-only state
+        // before any ManagedObject deletion, avoiding the crash where
+        // HistoryRowView tries to bridge a dead object's nil Date→Date.
+        let toDelete = items.filter { !$0.isPinned }
+        items = items.filter(\.isPinned)
+
+        for item in toDelete {
             context.delete(item)
         }
         saveContext()
