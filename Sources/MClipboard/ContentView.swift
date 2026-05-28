@@ -3,20 +3,24 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var clipboardManager: ClipboardManager
     @State private var selectedIndex: Int = 0
+    @State private var translationStates: [UUID: TranslationState] = [:]
     @FocusState private var isListFocused: Bool
 
     private var window: NSWindow? { NSApp.keyWindow }
 
     var body: some View {
+        // Capture filtered once at body level (observation scoping)
+        let filtered = clipboardManager.filteredItems
+
         VStack(spacing: 0) {
             headerView
 
             Divider().background(Color.blue.opacity(0.15))
 
-            if clipboardManager.filteredItems.isEmpty {
+            if filtered.isEmpty {
                 emptyStateView
             } else {
-                itemListView
+                itemListView(items: filtered)
             }
 
             Divider().background(Color.blue.opacity(0.15))
@@ -54,6 +58,7 @@ struct ContentView: View {
             Button {
                 clipboardManager.clearUnpinned()
                 selectedIndex = -1
+                translationStates.removeAll()
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 12))
@@ -105,16 +110,16 @@ struct ContentView: View {
 
     // MARK: - Item List
 
-    private var itemListView: some View {
+    private func itemListView(items: [ClipboardItemEntity]) -> some View {
         VStack(spacing: 0) {
             searchBarView
 
             ScrollViewReader { proxy in
                 List {
-                    ForEach(
-                        Array(clipboardManager.filteredItems.enumerated()),
-                        id: \.element.id
-                    ) { index, item in
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        let itemId = item.id
+                        let state = translationStates[itemId]
+
                         HistoryRowView(
                             item: item,
                             isSelected: index == selectedIndex,
@@ -125,11 +130,16 @@ struct ContentView: View {
                             onPin: { clipboardManager.togglePin(item) },
                             onDelete: {
                                 clipboardManager.deleteItem(item)
+                                translationStates.removeValue(forKey: itemId)
                                 let count = clipboardManager.filteredItems.count
                                 if selectedIndex >= count {
                                     selectedIndex = max(0, count - 1)
                                 }
-                            }
+                            },
+                            onTranslate: {
+                                startTranslation(for: itemId, text: item.textContent ?? "")
+                            },
+                            translationState: state
                         )
                         .id(index)
                         .listRowBackground(
@@ -152,6 +162,26 @@ struct ContentView: View {
                 .onChange(of: selectedIndex) { _, new in
                     withAnimation { proxy.scrollTo(new, anchor: .center) }
                 }
+            }
+        }
+    }
+
+    // MARK: - Translation
+
+    private func startTranslation(for itemId: UUID, text: String) {
+        guard !text.isEmpty else { return }
+
+        translationStates[itemId] = .loading
+
+        Task {
+            do {
+                let result = try await Translator.shared.translate(text)
+                translationStates[itemId] = .done(result)
+            } catch {
+                let message = error.localizedDescription
+                translationStates[itemId] = .error(
+                    message.count > 80 ? "Translation failed" : message
+                )
             }
         }
     }

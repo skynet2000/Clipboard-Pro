@@ -11,7 +11,8 @@ let package = Package(
             name: "MClipboard",
             path: "Sources/MClipboard",
             linkerSettings: [
-                .linkedFramework("Carbon")
+                .linkedFramework("Carbon"),
+                .linkedFramework("Translation")
             ]
         )
     ]
