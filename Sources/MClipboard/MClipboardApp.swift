@@ -13,9 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isOverlayShowing = false
     private var isHotKeyRegistered = false
     private var shortcutCount: Int = 0
+    private(set) var clipboardManager: ClipboardManager!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        clipboardManager = ClipboardManager()
         NSApp.activate(ignoringOtherApps: true)
         setupMainMenu()
         registerGlobalShortcut()
@@ -156,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showOverlay() {
         if overlayWindow == nil {
-            overlayWindow = OverlayWindow()
+            overlayWindow = OverlayWindow(clipboardManager: clipboardManager)
         }
         // Temporarily raise level to guarantee frontmost in accessory mode,
         // then reset to normal after the window settles.
@@ -337,7 +339,7 @@ struct BubbleView: View {
 // MARK: - Main Overlay Window
 
 final class OverlayWindow: NSWindow {
-    init() {
+    init(clipboardManager: ClipboardManager) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -361,7 +363,6 @@ final class OverlayWindow: NSWindow {
             ))
         }
 
-        let clipboardManager = ClipboardManager()
         contentViewController = NSHostingController(
             rootView: ContentView().environmentObject(clipboardManager)
         )
