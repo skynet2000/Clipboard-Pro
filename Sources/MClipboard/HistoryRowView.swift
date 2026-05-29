@@ -145,13 +145,24 @@ struct HistoryRowView: View {
                         .foregroundColor(.secondary.opacity(0.7))
 
                 case .error(let message):
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 10))
-                            .foregroundColor(.orange)
-                        Text(message)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.system(size: 10))
+                                .foregroundColor(.orange)
+                            Text(message)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+                        if message.contains("Language packs") {
+                            Button("Open System Settings →") {
+                                Translator.openLanguageSettings()
+                            }
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(red: 0.0, green: 0.48, blue: 1.0))
+                            .buttonStyle(.plain)
+                            .padding(.top, 2)
+                        }
                     }
                 }
             }

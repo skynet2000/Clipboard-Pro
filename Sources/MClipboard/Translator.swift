@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Translation
 
@@ -30,6 +31,26 @@ final class Translator {
 
     private init() {}
 
+    /// Check whether the required language packs are installed.
+    @available(macOS 15.0, *)
+    func checkAvailability() async -> LanguageAvailability.Status {
+        let avail = LanguageAvailability()
+        let zh = Locale.Language(identifier: "zh-Hans")
+        let en = Locale.Language(identifier: "en")
+        let zhStatus = await avail.status(from: zh, to: en)
+        if zhStatus == .installed { return .installed }
+        let enStatus = await avail.status(from: en, to: zh)
+        if enStatus == .installed { return .installed }
+        if zhStatus == .supported || enStatus == .supported { return .supported }
+        return .unsupported
+    }
+
+    /// Open System Settings → Translation Languages to download packs.
+    static func openLanguageSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension")!
+        NSWorkspace.shared.open(url)
+    }
+
     /// Auto-detect language and translate between Chinese and English.
     func translate(_ text: String) async throws -> TranslationResult {
         guard #available(macOS 26.0, *) else {
@@ -51,13 +72,22 @@ final class Translator {
         }
 
         let session = TranslationSession(installedSource: source, target: target)
-        let response = try await session.translate(text)
 
-        return TranslationResult(
-            sourceText: text,
-            translatedText: response.targetText,
-            direction: direction
-        )
+        do {
+            let response = try await session.translate(text)
+            return TranslationResult(
+                sourceText: text,
+                translatedText: response.targetText,
+                direction: direction
+            )
+        } catch {
+            switch error {
+            case TranslationError.notInstalled:
+                throw TranslatorError.languageNotInstalled
+            default:
+                throw error
+            }
+        }
     }
 
     // MARK: - Language Detection
@@ -84,11 +114,23 @@ final class Translator {
 
 enum TranslatorError: LocalizedError {
     case unsupportedOS
+    case languageNotInstalled
 
     var errorDescription: String? {
         switch self {
         case .unsupportedOS:
-            "Translation requires macOS 26.0 or newer"
+            "Translation requires macOS 26 or newer"
+        case .languageNotInstalled:
+            "Language packs not installed"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .unsupportedOS:
+            "Update macOS to use built-in translation"
+        case .languageNotInstalled:
+            "Download Chinese & English packs in System Settings → Translation Languages"
         }
     }
 }
