@@ -32,17 +32,14 @@ final class Translator {
     private init() {}
 
     /// Check whether the required language packs are installed.
-    @available(macOS 15.0, *)
-    func checkAvailability() async -> LanguageAvailability.Status {
+    @available(macOS 26.0, *)
+    func checkAvailability() async -> Bool {
         let avail = LanguageAvailability()
         let zh = Locale.Language(identifier: "zh-Hans")
         let en = Locale.Language(identifier: "en")
         let zhStatus = await avail.status(from: zh, to: en)
-        if zhStatus == .installed { return .installed }
         let enStatus = await avail.status(from: en, to: zh)
-        if enStatus == .installed { return .installed }
-        if zhStatus == .supported || enStatus == .supported { return .supported }
-        return .unsupported
+        return zhStatus == .installed || enStatus == .installed
     }
 
     /// Open System Settings → Translation Languages to download packs.
@@ -69,6 +66,15 @@ final class Translator {
             source = Locale.Language(identifier: "en")
             target = Locale.Language(identifier: "zh-Hans")
             direction = .englishToChinese
+        }
+
+        // Check language pack availability inline
+        let avail = LanguageAvailability()
+        let packStatus = await avail.status(from: source, to: target)
+        guard packStatus == .installed else {
+            throw packStatus == .supported
+                ? TranslatorError.languageNotInstalled
+                : TranslatorError.languageNotInstalled
         }
 
         let session = TranslationSession(installedSource: source, target: target)

@@ -4,7 +4,6 @@ struct ContentView: View {
     @EnvironmentObject var clipboardManager: ClipboardManager
     @State private var selectedIndex: Int = 0
     @State private var translationStates: [UUID: TranslationState] = [:]
-    @State private var translationAvailable: Bool? = nil
     @FocusState private var isListFocused: Bool
 
     private var window: NSWindow? { NSApp.keyWindow }
@@ -33,12 +32,6 @@ struct ContentView: View {
         .onAppear {
             clipboardManager.loadItems()
             selectedIndex = clipboardManager.filteredItems.isEmpty ? -1 : 0
-            if #available(macOS 15.0, *) {
-                Task {
-                    let status = await Translator.shared.checkAvailability()
-                    translationAvailable = (status == .installed)
-                }
-            }
         }
     }
 
@@ -177,32 +170,22 @@ struct ContentView: View {
 
     private func startTranslation(for itemId: UUID, text: String) {
         guard !text.isEmpty else { return }
+        translationStates[itemId] = .loading
 
         Task {
-            // Check language availability
-            if #available(macOS 15.0, *) {
-                if translationAvailable == nil {
-                    let status = await Translator.shared.checkAvailability()
-                    translationAvailable = (status == .installed)
-                }
-                guard translationAvailable == true else {
-                    translationStates[itemId] = .error(
-                        "Language packs not installed. Tap to open System Settings."
-                    )
-                    return
-                }
-            }
-
-            translationStates[itemId] = .loading
-
             do {
                 let result = try await Translator.shared.translate(text)
                 translationStates[itemId] = .done(result)
             } catch {
                 let message = error.localizedDescription
-                translationStates[itemId] = .error(
-                    message.count > 80 ? "Translation failed" : message
-                )
+                // Try to give helpful guidance for known errors
+                if error is TranslatorError {
+                    translationStates[itemId] = .error(message)
+                } else {
+                    translationStates[itemId] = .error(
+                        message.count > 80 ? "Translation failed" : message
+                    )
+                }
             }
         }
     }

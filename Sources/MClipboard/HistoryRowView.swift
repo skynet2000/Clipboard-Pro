@@ -153,8 +153,9 @@ struct HistoryRowView: View {
                             Text(message)
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
+                                .lineLimit(4)
                         }
-                        if message.contains("Language packs") {
+                        if message.localizedCaseInsensitiveContains("Language") {
                             Button("Open System Settings →") {
                                 Translator.openLanguageSettings()
                             }
