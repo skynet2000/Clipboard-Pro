@@ -37,6 +37,7 @@
 - ⌨️ **全局快捷键** — `⌘ + ⇧ + V` 一键唤起/隐藏面板，基于 Carbon `RegisterEventHotKey`，无需辅助功能权限
 - 🫧 **悬浮气泡** — 启动后在屏幕右侧显示毛玻璃风格按钮
 - 💾 **数据持久化** — 基于 Core Data 存储，重启后历史不丢失
+- 🌐 **中英互译** — 右键文本记录一键翻译，Apple Translation 框架驱动（macOS 26+）
 - 🎨 **原生设计** — 淡蓝色配色 + 毛玻璃效果，遵循 macOS 设计规范
 - 🔌 **通用兼容** — 同时支持 Intel 和 Apple Silicon 芯片
 
@@ -140,6 +141,7 @@ xattr -dr com.apple.quarantine /Applications/MClipboard.app
 | 关闭面板 | `ESC` 或 点击面板外部 |
 | 置顶/取消置顶 | 右键记录 → Pin / Unpin |
 | 搜索历史 | 面板顶部搜索框输入关键词 |
+| 翻译 | 右键文本记录 → Translate（内嵌结果） |
 | 清空历史 | 点击面板顶部 🗑️ 按钮（仅清除非置顶记录） |
 | 退出程序 | 右键悬浮气泡 → Quit MClipboard |
 
@@ -171,18 +173,21 @@ Clipboard-Pro/
     ├── PersistenceController.swift # Core Data 持久化层
     ├── ClipboardManager.swift     # 剪贴板监控 + 数据管理
     ├── ContentView.swift          # 主面板界面
-    └── HistoryRowView.swift       # 历史记录行组件
+    ├── HistoryRowView.swift       # 历史记录行组件
+    └── Translator.swift           # 翻译服务封装
 ```
 
 ## 📝 更新日志
 
-### v1.0.2 (2026-05-27)
+### v1.0.2 (2026-06-04)
 
+- 🌐 新增中英互译功能，右键文本记录 → Translate，Apple Translation 框架驱动
 - 🔧 全局快捷键改用 Carbon `RegisterEventHotKey`，无需辅助功能权限，更可靠
 - 🐛 修复删除记录后崩溃（NSManagedObject 释放时序问题）
 - 🐛 修复弹窗始终浮在其他窗口之上的问题
 - ✨ 快捷键增加三态切换：关→开 / 被遮挡→翻到最前 / 最前→关
 - 🐛 修复快捷键偶尔失灵问题
+- 🐛 修复翻译 LanguageAvailability 预检误判
 - 📖 新增 macOS 未签名应用安装指南
 
 ### v1.0.1 (2026-05-25)

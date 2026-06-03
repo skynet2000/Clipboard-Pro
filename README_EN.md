@@ -37,6 +37,7 @@ Most clipboard tools are either expensive (Paste at $14.99/yr) or bloated. Clipb
 - ⌨️ **Global Shortcut** — `⌘⇧V` anywhere, powered by Carbon `RegisterEventHotKey` — no Accessibility permission required
 - 🫧 **Floating Bubble** — Frosted-glass button on screen right side at launch
 - 💾 **Persistent** — Core Data storage, history survives restarts
+- 🌐 **Translation** — Right-click text item → Translate, powered by Apple Translation (macOS 26+)
 - 🎨 **Native Design** — Light blue palette + frosted glass, macOS design language
 - 🔌 **Universal** — Intel and Apple Silicon
 
@@ -138,6 +139,7 @@ xattr -dr com.apple.quarantine /Applications/MClipboard.app
 | Close panel | `ESC` or click outside |
 | Pin/Unpin | Right-click item → Pin / Unpin |
 | Search | Type in the search bar at top |
+| Translate | Right-click text item → Translate (inline result) |
 | Clear history | Click 🗑️ button (keeps pinned items) |
 | Quit | Right-click floating bubble → Quit MClipboard |
 
@@ -169,18 +171,21 @@ Clipboard-Pro/
     ├── PersistenceController.swift # Core Data layer
     ├── ClipboardManager.swift     # Clipboard monitor + data management
     ├── ContentView.swift          # Main panel UI
-    └── HistoryRowView.swift       # History row component
+    ├── HistoryRowView.swift       # History row component
+    └── Translator.swift           # Translation service
 ```
 
 ## 📝 Changelog
 
-### v1.0.2 (2026-05-27)
+### v1.0.2 (2026-06-04)
 
+- 🌐 New: Translation feature — right-click text → Translate, powered by Apple Translation
 - 🔧 Switched to Carbon `RegisterEventHotKey` for global shortcut — no Accessibility permission needed, more reliable
 - 🐛 Fixed crash when clearing history (Core Data entity release timing)
 - 🐛 Fixed panel always floating on top of other windows
 - ✨ Three-state shortcut toggle: hidden→show / obscured→bring-to-front / frontmost→hide
 - 🐛 Fixed intermittent shortcut unresponsiveness
+- 🐛 Fixed translation LanguageAvailability false-negative check
 - 📖 Added installation guide for unsigned macOS apps
 
 ### v1.0.1 (2026-05-25)
