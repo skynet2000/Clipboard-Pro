@@ -31,17 +31,6 @@ final class Translator {
 
     private init() {}
 
-    /// Check whether the required language packs are installed.
-    @available(macOS 26.0, *)
-    func checkAvailability() async -> Bool {
-        let avail = LanguageAvailability()
-        let zh = Locale.Language(identifier: "zh-Hans")
-        let en = Locale.Language(identifier: "en")
-        let zhStatus = await avail.status(from: zh, to: en)
-        let enStatus = await avail.status(from: en, to: zh)
-        return zhStatus == .installed || enStatus == .installed
-    }
-
     /// Open System Settings → Translation Languages to download packs.
     static func openLanguageSettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension")!
@@ -49,6 +38,7 @@ final class Translator {
     }
 
     /// Auto-detect language and translate between Chinese and English.
+    /// Relies on TranslationSession to detect missing packs at call time — no LanguageAvailability pre-check.
     func translate(_ text: String) async throws -> TranslationResult {
         guard #available(macOS 26.0, *) else {
             throw TranslatorError.unsupportedOS
@@ -68,15 +58,6 @@ final class Translator {
             direction = .englishToChinese
         }
 
-        // Check language pack availability inline
-        let avail = LanguageAvailability()
-        let packStatus = await avail.status(from: source, to: target)
-        guard packStatus == .installed else {
-            throw packStatus == .supported
-                ? TranslatorError.languageNotInstalled
-                : TranslatorError.languageNotInstalled
-        }
-
         let session = TranslationSession(installedSource: source, target: target)
 
         do {
@@ -86,13 +67,16 @@ final class Translator {
                 translatedText: response.targetText,
                 direction: direction
             )
-        } catch {
+        } catch let error as TranslationError {
+            // Only TranslationError.notInstalled means packs missing
             switch error {
-            case TranslationError.notInstalled:
+            case .notInstalled:
                 throw TranslatorError.languageNotInstalled
             default:
                 throw error
             }
+        } catch {
+            throw error
         }
     }
 
