@@ -44,6 +44,7 @@ final class Translator {
             throw TranslatorError.unsupportedOS
         }
 
+#if compiler(>=6.2)
         let source: Locale.Language
         let target: Locale.Language
         let direction: TranslationResult.TranslationDirection
@@ -78,6 +79,10 @@ final class Translator {
         } catch {
             throw error
         }
+#else
+        // CI fallback: macOS 15 SDK lacks TranslationSession macOS-26.0 symbols
+        throw TranslatorError.unsupportedOS
+#endif
     }
 
     // MARK: - Language Detection
