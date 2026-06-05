@@ -22,6 +22,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupMainMenu()
         registerGlobalShortcut()
         registerLocalKeyMonitor()
+        // Drop overlay to normal level when MClipboard resigns active
+        // (user clicks another app). showOverlay/bringOverlayToFront will
+        // re-raise to .floating on next activation via shortcut or bubble tap.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.overlayWindow?.level = .normal
+        }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.showBubble()
         }
@@ -155,11 +166,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if overlayWindow == nil {
             overlayWindow = OverlayWindow(clipboardManager: clipboardManager)
         }
-        // Keep .floating level permanently. In accessory mode, .normal-level
-        // windows are not reliably ordered above other apps' windows.
-        // Level-toggling (.floating → .normal after delay) causes a race
-        // with the OS window manager: the overlay appears, then is ordered
-        // behind the previously-active app — the "flash and vanish" bug.
+        // Raise to .floating so the overlay appears above other apps.
+        // didResignActiveNotification will drop it back to .normal when
+        // the user clicks away — avoiding permanent floating-top behavior.
         overlayWindow?.level = .floating
         overlayWindow?.orderFrontRegardless()
         overlayWindow?.makeKey()
