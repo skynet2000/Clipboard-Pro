@@ -25,13 +25,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Drop overlay to normal level when MClipboard resigns active
         // (user clicks another app). showOverlay/bringOverlayToFront will
         // re-raise to .floating on next activation via shortcut or bubble tap.
+        // Using @objc selector to avoid Swift 6 Sendable closure restrictions
+        // with @MainActor-isolated properties (Xcode 16.4 / macOS 15 CI).
         NotificationCenter.default.addObserver(
-            forName: NSApplication.didResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.overlayWindow?.level = .normal
-        }
+            self,
+            selector: #selector(handleResignActive),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.showBubble()
@@ -160,6 +161,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fflush(stderr)
             hideOverlay()
         }
+    }
+
+    // MARK: - Window Level Management
+
+    @objc private func handleResignActive() {
+        overlayWindow?.level = .normal
     }
 
     func showOverlay() {
