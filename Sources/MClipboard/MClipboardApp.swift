@@ -133,7 +133,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Shortcut Handling (Three-State Toggle)
 
+    private var lastShortcutTime: TimeInterval = 0
+    private let shortcutDebounceInterval: TimeInterval = 0.3
+
     func handleShortcut() {
+        // Debounce: ignore rapid re-triggers from mouse event propagation or double-tap
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastShortcutTime >= shortcutDebounceInterval else {
+            fputs("[MClipboard] shortcut debounced (Δt=\(String(format: "%.3f", now - lastShortcutTime))s)\n", stderr)
+            fflush(stderr)
+            return
+        }
+        lastShortcutTime = now
+
         shortcutCount += 1
         fputs("[MClipboard] shortcut #\(shortcutCount) isShowing=\(isOverlayShowing) isKey=\(overlayWindow?.isKeyWindow ?? false)\n", stderr)
         fflush(stderr)
@@ -161,14 +173,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             overlayWindow = OverlayWindow(clipboardManager: clipboardManager)
         }
         // Temporarily raise level to guarantee frontmost in accessory mode,
-        // then reset to normal after the window settles.
+        // then reset to normal after the window settles and is confirmed key.
         overlayWindow?.level = .floating
         overlayWindow?.orderFrontRegardless()
         overlayWindow?.makeKey()
         NSApp.activate(ignoringOtherApps: true)
         isOverlayShowing = true
-        DispatchQueue.main.async {
-            self.overlayWindow?.level = .normal
+        // Defer level reset until the window system has fully processed activation.
+        // A short delay prevents the "flash and vanish" race where the overlay is
+        // ordered out during accessory-mode activation handoff to another app.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, let window = self.overlayWindow, window.isVisible else { return }
+            window.level = .normal
         }
     }
 
@@ -178,7 +194,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.orderFrontRegardless()
         window.makeKey()
         NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, let window = self.overlayWindow, window.isVisible else { return }
             window.level = .normal
         }
     }
@@ -194,11 +211,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard bubbleWindow == nil else { return }
         bubbleWindow = BubbleWindow { [weak self] in
             guard let self else { return }
-            if self.isOverlayShowing {
-                self.hideOverlay()
-            } else {
-                self.showOverlay()
-            }
+            // Use the three-state shortcut logic for consistent behavior.
+            // Prevents the "flash and vanish" bug where a simple binary toggle
+            // would hide the overlay when it's showing but behind other windows.
+            self.handleShortcut()
         }
 
         let key = "MClipboard_firstWindowShown"
