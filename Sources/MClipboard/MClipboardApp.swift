@@ -131,37 +131,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Shortcut Handling (Three-State Toggle)
-
-    private var lastShortcutTime: TimeInterval = 0
-    private let shortcutDebounceInterval: TimeInterval = 0.3
-
     func handleShortcut() {
-        // Debounce: ignore rapid re-triggers from mouse event propagation or double-tap
-        let now = ProcessInfo.processInfo.systemUptime
-        guard now - lastShortcutTime >= shortcutDebounceInterval else {
-            fputs("[MClipboard] shortcut debounced (Δt=\(String(format: "%.3f", now - lastShortcutTime))s)\n", stderr)
-            fflush(stderr)
-            return
-        }
-        lastShortcutTime = now
-
         shortcutCount += 1
         fputs("[MClipboard] shortcut #\(shortcutCount) isShowing=\(isOverlayShowing) isKey=\(overlayWindow?.isKeyWindow ?? false)\n", stderr)
         fflush(stderr)
 
         if !isOverlayShowing {
-            // State 1: Window is hidden → show it
             fputs("[MClipboard] → showOverlay\n", stderr)
             fflush(stderr)
             showOverlay()
         } else if overlayWindow?.isKeyWindow != true {
-            // State 2: Window is open but behind other windows → bring to front
             fputs("[MClipboard] → bringToFront\n", stderr)
             fflush(stderr)
             bringOverlayToFront()
         } else {
-            // State 3: Window is frontmost → hide it
             fputs("[MClipboard] → hideOverlay\n", stderr)
             fflush(stderr)
             hideOverlay()
@@ -172,20 +155,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if overlayWindow == nil {
             overlayWindow = OverlayWindow(clipboardManager: clipboardManager)
         }
-        // Temporarily raise level to guarantee frontmost in accessory mode,
-        // then reset to normal after the window settles and is confirmed key.
+        // Keep .floating level permanently. In accessory mode, .normal-level
+        // windows are not reliably ordered above other apps' windows.
+        // Level-toggling (.floating → .normal after delay) causes a race
+        // with the OS window manager: the overlay appears, then is ordered
+        // behind the previously-active app — the "flash and vanish" bug.
         overlayWindow?.level = .floating
         overlayWindow?.orderFrontRegardless()
         overlayWindow?.makeKey()
         NSApp.activate(ignoringOtherApps: true)
         isOverlayShowing = true
-        // Defer level reset until the window system has fully processed activation.
-        // A short delay prevents the "flash and vanish" race where the overlay is
-        // ordered out during accessory-mode activation handoff to another app.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            guard let self, let window = self.overlayWindow, window.isVisible else { return }
-            window.level = .normal
-        }
     }
 
     func bringOverlayToFront() {
@@ -194,10 +173,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.orderFrontRegardless()
         window.makeKey()
         NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            guard let self, let window = self.overlayWindow, window.isVisible else { return }
-            window.level = .normal
-        }
     }
 
     func hideOverlay() {
@@ -317,30 +292,31 @@ struct BubbleView: View {
     @State private var isHovered = false
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .frame(width: 46, height: 46)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            Color.primary.opacity(isHovered ? 0.15 : 0.08),
-                            lineWidth: 0.5
-                        )
-                )
+        Button(action: onTap) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 46, height: 46)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                Color.primary.opacity(isHovered ? 0.15 : 0.08),
+                                lineWidth: 0.5
+                            )
+                    )
 
-            Image(systemName: "clipboard.fill")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(
-                    Color(red: 0.3, green: 0.6, blue: 0.95)
-                        .opacity(isHovered ? 1.0 : 0.85)
-                )
+                Image(systemName: "clipboard.fill")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(
+                        Color(red: 0.3, green: 0.6, blue: 0.95)
+                            .opacity(isHovered ? 1.0 : 0.85)
+                    )
+            }
+            .frame(width: 46, height: 46)
         }
-        .frame(width: 46, height: 46)
-        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.06 : 1.0)
         .animation(.easeOut(duration: 0.15), value: isHovered)
-        .onTapGesture { onTap() }
         .onHover { hovering in isHovered = hovering }
         .contextMenu {
             Button("Show Clipboard") { onTap() }
